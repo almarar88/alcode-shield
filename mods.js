@@ -31,12 +31,13 @@ export async function ip(v) {
   <div class="tabs" id="it" style="margin-bottom:14px">${[["text", "file-text", "نص", "Text"], ["clone", "world-search", "استنساخ موقع", "Site clone"], ["image", "photo-search", "صور", "Images"], ["typo", "fingerprint", "نطاقات مشابهة", "Lookalike domains"], ["hist", "history", "السجل", "History"]].map((t, i) => `<button class="tab ${i ? "" : "on"}" data-t="${t[0]}">${ic(t[1], "sm")} ${L(t[2], t[3])}</button>`).join("")}</div><div id="ib"></div>`;
   let last = null;
   const aiBox = () => `<div class="card noprint" style="margin-top:16px" id="aib"><h2>${ic("sparkles")} ${L("الذكاء الاصطناعي", "AI")}</h2><div class="row"><button class="btn" id="ais">${ic("sparkles")} ${L("لخّص النتائج", "Summarise results")}</button><button class="btn" id="ait">${ic("gavel")} ${L("مسودة إشعار إزالة (DMCA)", "Draft takedown (DMCA)")}</button></div><textarea class="in" id="ain" style="margin-top:10px;min-height:60px" placeholder="${L("ملاحظات إضافية للمسودة (اختياري)", "Extra notes for the draft (optional)")}"></textarea><div id="aio"></div></div>`;
-  const wireAi = (kind) => { const go = async (k, b) => { if (!last) return toast(L("شغّل فحصاً أولاً", "Run a check first")); busy(b, true, L("يحلل…", "Analysing…"));
+  const wireAi = (kind) => { const go = async (k, b) => { if (!last) return toast(L("شغّل فحصاً أولاً", "Run a check first"));
+      if (k === "takedown" && Array.isArray(last) && !last.some((r) => (r.contain || 0) >= 15) && !confirm(L("النتائج لا تُظهر نسخاً واضحاً (أقل من 15%). هل تريد إنشاء مسودة رغم ذلك؟", "Results show no clear copying (<15%). Draft anyway?"))) return; busy(b, true, L("يحلل…", "Analysing…"));
       try { const { data: d } = await api("ip_ai", { kind: k, data: { kind, results: last }, note: $("#ain").value }); $("#aio").innerHTML = k === "takedown" ? takedownHtml(d) : summaryHtml(d); copyBtns($("#aio")); } catch (e) { toast(ERR(e)); } busy(b, false); };
     $("#ais").onclick = (e) => go("summary", e.currentTarget); $("#ait").onclick = (e) => go("takedown", e.currentTarget); };
   const summaryHtml = (d) => `<p>${esc(d.summary_ar || "")}</p>${(d.items || []).map((x) => `<div class="note sm" style="margin:6px 0"><b class="ltr">${esc(x.target)}</b> · <span class="pill s-${x.confidence === "high" ? "high" : x.confidence === "medium" ? "medium" : "low"}">${esc(x.confidence)}</span><div>${esc(x.assessment_ar)}</div><div class="mu">${esc(x.next_ar || "")}</div></div>`).join("")}${(d.next_steps_ar || []).length ? `<ol>${d.next_steps_ar.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}`;
   const takedownHtml = (d) => `<div class="note warn sm">${ic("alert-triangle", "sm")} ${L("مسودة للمراجعة فقط — لم تُرسل لأي جهة. راجعها وعدّل البيانات بين الأقواس قبل الإرسال بنفسك.", "Draft for review only — nothing was sent. Edit placeholders and send it yourself.")}</div>
-    <h3 style="margin-top:12px">العربية</h3><div class="b">${esc(d.subject_ar || "")}</div><pre class="code" style="direction:rtl;text-align:right">${esc(d.body_ar || "")}</pre>
+    <h3 style="margin-top:12px">العربية</h3><div class="b">${esc(d.subject_ar || "")}</div><pre class="code" style="direction:rtl;text-align:right;font-family:var(--f);font-size:14px">${esc(d.body_ar || "")}</pre>
     <h3>English</h3><div class="b ltr">${esc(d.subject_en || "")}</div><pre class="code">${esc(d.body_en || "")}</pre>
     ${d.send_to_hint_ar ? `<div class="note sm"><b>${L("إلى أين تُرسل عادة", "Where to send")}:</b> ${esc(d.send_to_hint_ar)}</div>` : ""}${d.legal_basis_ar ? `<div class="note sm" style="margin-top:6px"><b>${L("الأساس القانوني", "Legal basis")}:</b> ${esc(d.legal_basis_ar)} <a href="#/guide">${L("الدليل", "guide")}</a></div>` : ""}
     <div class="row" style="margin-top:8px"><button class="btn sm" id="dlt">${ic("download", "sm")} ${L("تنزيل المسودة", "Download draft")}</button></div>`;
@@ -86,7 +87,7 @@ const mask = (s) => s.length <= 10 ? s.slice(0, 2) + "…" : s.slice(0, 6) + "�
 function jwtRole(t) { try { const p = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); return p.role || ""; } catch { return ""; } }
 async function sha1(t) { const b = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(t)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase(); }
 export async function privacy(v) {
-  const me = S.me || (await api("me")).me; const id = me.identity || {}; const R = {};
+  const me = (await api("me")).me; S.me = me; const id = me.identity || {}; const R = {};
   const email = me.auth_email, handles = id.handles || [], gh = id.github || "", name = id.name || me.name || "", phone = id.phone || "";
   const q = (s) => encodeURIComponent(`"${s}"`);
   v.innerHTML = top(L("انكشاف بياناتي الشخصية", "My data exposure"), L("فحوصات لبياناتك أنت فقط (صاحب الحساب). لا نخمّن نتائج: ما لا يمكن فحصه آلياً نوضّحه كـ «غير متاح».", "Checks on your own data only. No guessing: what can't be checked automatically is marked “not available”.")) + `
@@ -123,7 +124,8 @@ export async function privacy(v) {
         for (let i = 0; i < fl.length; i += 8) await Promise.all(fl.slice(i, i + 8).map(async (f) => { try { const tx = await (await fetch(`https://raw.githubusercontent.com/${r.full_name}/${encodeURIComponent(r.default_branch)}/${f.path.split("/").map(encodeURIComponent).join("/")}`)).text(); files++;
           for (const [k, re, sev] of SECRETS) { re.lastIndex = 0; let m; while ((m = re.exec(tx))) { let val = m[1] || m[0], s2 = sev, kind = k;
             if (k === "jwt") { const role = jwtRole(val); if (role === "service_role") { s2 = "critical"; kind = "supabase_service_role"; } else if (role === "anon") { s2 = "info"; kind = "supabase_anon (public by design)"; } else s2 = "medium"; }
-            if (k === "generic_secret" && /example|placeholder|your|xxxx|test|dummy|process\.env|import\.meta/i.test(m[0])) continue;
+            if (k === "generic_secret" && /example|placeholder|your|xxxx|test|dummy|change|replace|process\.env|import\.meta/i.test(m[0])) continue;
+            if (/\.(example|sample|template|dist)$|\.example\.|\.sample\./i.test(f.path) && s2 !== "critical") s2 = "info";
             if (!found.some((x) => x.v === val && x.repo === r.name)) found.push({ repo: r.name, path: f.path, kind, sev: s2, v: val, line: tx.slice(0, m.index).split("\n").length }); } } } catch {} }));
       }
       const real = found.filter((x) => x.sev !== "info"); R.github_secret_scan = { repos, files, findings: found.map((x) => ({ repo: x.repo, path: x.path, kind: x.kind, severity: x.sev })), rate_limited_repos: skipped };
